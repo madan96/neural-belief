@@ -21,6 +21,11 @@ class CPC_30(nn.Module):
 class CPCI_Action_1(nn.Module):
     def __init__(self):
         super(CPCI_Action_1, self).__init__()
+        self.conv = ConvBasic()
+        self.belief_gru = beliefGRU()
+        self.action_gru = actionGRU()
+        self.mlp = MLP()
+        self.eval_mlp = evalMLP()
 
 class CPCI_Action_30(nn.Module):
     def __init__(self):

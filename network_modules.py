@@ -29,7 +29,7 @@ class beliefGRU(nn.Module):
     def __init__(self):
         super(beliefGRU, self).__init__()
         # Check input size
-        self.gru1 = nn.GRU(516, 512, 1)
+        self.gru1 = nn.GRU(516, 512)
     
     def forward(self, x):
         out = self.gru1(x)
@@ -39,7 +39,7 @@ class actionGRU(nn.Module):
     def __init__(self):
         super(actionGRU, self).__init__()
         # Check input size
-        self.gru1 = nn.GRU(512, 512, 1)
+        self.gru1 = nn.GRU(512, 512)
     
     def forward(self, x):
         out = self.gru1(x)
