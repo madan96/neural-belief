@@ -22,24 +22,27 @@ class ConvBasic(nn.Module):
         out = self.relu4(self.hidden1(flat_out))
         return out
 
+# TODO: Possible remove belief and action GRU classes and use nn.GRU directly
+# TODO: Check GRU num_layers
+
 class beliefGRU(nn.Module):
     def __init__(self):
         super(beliefGRU, self).__init__()
         # Check input size
-        self.hidden1 = nn.Linear(516, 512)
+        self.gru1 = nn.GRU(516, 512, 1)
     
     def forward(self, x):
-        out = self.hidden1(x)
+        out = self.gru1(x)
         return out
 
 class actionGRU(nn.Module):
     def __init__(self):
         super(actionGRU, self).__init__()
         # Check input size
-        self.hidden1 = nn.Linear(512, 512)
+        self.gru1 = nn.GRU(512, 512, 1)
     
     def forward(self, x):
-        out = self.hidden1(x)
+        out = self.gru1(x)
         return out
 
 class MLP(nn.Module):
@@ -69,6 +72,7 @@ class BasicDeconv(nn.Module):
         out = self.relu1(self.deconv1(x))
         out = self.relu2(self.deconv2(out))
         out = self.relu3(self.deconv3(out))
+        return out
 
 class evalMLP(nn.Module):
     def __init__(self):
