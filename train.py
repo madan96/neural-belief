@@ -14,57 +14,51 @@ from tqdm import tqdm
 import numpy as np
 import torch
 
+def replay(replay_buffer):
+    replay_buffer.sample(64)
+    return
+
 def train_FP(env, args):
     model = FP()
-    optim = torch.optim.Adam(model.parameters(), lr=0.0005)
-    replay_buffer = MemoryBuffer(int(5e4))
+    model.optim = torch.optim.Adam(model.parameters(), lr=0.0005)
+    replay_buffer = MemoryBuffer(int(5e1))
 
     agent = RandomAgent(env.action_spec())
-    max_steps = int(5e6)
+    max_steps = int(5e3)
     env.reset()
 
-    i = 0
+    step = 0
     sub_trajectory = SubTrajectory(100)
 
     pbar = tqdm(total = max_steps)
 
-    while i < max_steps:
+    while step < max_steps:
         action = agent.step()
-        for _ in range(np.random.randint(1,5)):
-            rgb, pos, orientation = env.observations()['RGB'], env.observations()['DEBUG.POS.TRANS'], env.observations()['DEBUG.POS.ROT']
-            reward = env.step(action)
-            if (not env.is_running()):
-                env.reset()
-            else:
-                new_rgb, new_pos, new_orientation = env.observations()['RGB'], env.observations()['DEBUG.POS.TRANS'], env.observations()['DEBUG.POS.ROT']
-            
-            if sub_trajectory.len > 100:
-                replay_buffer.add(sub_trajectory)
-                sub_trajectory.clear()
+        # for _ in range(np.random.randint(1,5)):
+        rgb, pos, orientation = env.observations()['RGB'], env.observations()['DEBUG.POS.TRANS'], env.observations()['DEBUG.POS.ROT']
+        reward = env.step(action)
+        if (not env.is_running()):
+            env.reset()
+        else:
+            new_rgb, new_pos, new_orientation = env.observations()['RGB'], env.observations()['DEBUG.POS.TRANS'], env.observations()['DEBUG.POS.ROT']
+        
+        if sub_trajectory.len == 100:
+            replay_buffer.add(sub_trajectory)
+            sub_trajectory.clear()
 
-            sub_trajectory.add(rgb, pos, orientation, action, new_rgb, new_pos, new_orientation)
+        sub_trajectory.add(rgb, pos, orientation, action, new_rgb, new_pos, new_orientation)
 
-            # Train using replay_buffer
-            replay_buffer.sample(64)
-            i += 1
-            pbar.update(1)
+        # Train using replay_buffer
+        if step > replay_buffer.maxSize * 100:
+            train_batch = replay_buffer.sample(64)
+            if None in train_batch:
+                raise Exception("Training batch contains None object")
+            model.update(train_batch)
+
+        step += 1
+        pbar.update(1)
     
     pbar.close()
-
-    
-    
-    print ("Episodes ran: ", episode, "Sub trajectories: ", count)
-        
-    """
-    * Implement replay buffer
-        * Store sub-trajectory as one observation. Each sub-trajectory is 100 steps.
-        * Buffer size is 5e4.
-        * Class sub-trajectory to make a single sub-trajectory
-        * Class replay-buffer (FIFO) to store sub-trajectory objects
-        * Sample a mini-batch of 60 sub-trajectories and return the batch 
-    """
-    
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)

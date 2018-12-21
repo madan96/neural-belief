@@ -1,12 +1,39 @@
 import numpy as np
 import random
 from collections import deque
+import warnings
 
+class RingBuffer(object):
+    def __init__(self, maxlen):
+        self.maxlen = maxlen
+        self.start = 0
+        self.length = 0
+        self.data = [None for _ in range(maxlen)]
+
+    def __len__(self):
+        return self.length
+
+    def __getitem__(self, idx):
+        if idx < 0 or idx >= self.length:
+            raise KeyError()
+        return self.data[(self.start + idx) % self.maxlen]
+
+    def append(self, v):
+        if self.length < self.maxlen:
+            # We have space, simply increase the length.
+            self.length += 1
+        elif self.length == self.maxlen:
+            # No space, "remove" the first item.
+            self.start = (self.start + 1) % self.maxlen
+        else:
+            # This should never happen.
+            raise RuntimeError()
+        self.data[(self.start + self.length - 1) % self.maxlen] = v
 
 class MemoryBuffer:
 
 	def __init__(self, size):
-		self.buffer = deque(maxlen=size)
+		self.buffer = RingBuffer(size)
 		self.maxSize = size
 		self.len = 0
 
@@ -16,23 +43,11 @@ class MemoryBuffer:
 		:param count: batch size
 		:return: batch (numpy array)
 		"""
+
 		batch = []
 		count = min(count, self.len)
-		batch = random.sample(self.buffer, count)
-		rgb, new_rgb = np.empty((1,3,84,84)), np.empty((1,3,84,84))
-		pos, new_pos = np.empty((1,3)), np.empty((1,3))
-		ori, new_ori = np.empty((1,3)), np.empty((1,3))
-		action = np.empty((1,7))
-		for sub_traj in batch:
-			rgb = np.concatenate((rgb, sub_traj.rgb))
-			pos = np.concatenate((pos, sub_traj.pos))
-			ori = np.concatenate((ori, sub_traj.ori))
-			new_rgb = np.concatenate((new_rgb, sub_traj.new_rgb))
-			new_pos = np.concatenate((new_pos, sub_traj.new_pos))
-			new_ori = np.concatenate((new_ori, sub_traj.new_ori))
-			action = np.concatenate((action, sub_traj.action))
-				
-		return rgb, pos, ori, action, new_rgb, new_pos, new_ori
+		batch = random.sample(self.buffer.data, count)
+		return batch		
 
 	def len(self):
 		return self.len
@@ -51,7 +66,6 @@ class MemoryBuffer:
 		if self.len > self.maxSize:
 			self.len = self.maxSize
 		self.buffer.append(sub_trajectory)
-
 
 class SubTrajectory(object):
 	def __init__(self, size):

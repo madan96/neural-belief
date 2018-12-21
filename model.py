@@ -9,6 +9,16 @@ class FP(nn.Module):
         self.gru = beliefGRU()
         self.deconv = BasicDeconv()
         self.mlp = MLP()
+        self.optim = None
+    
+    def update(self, data_batch):
+        self.optim.zero_grad()
+        for data in data_batch:
+            for i in range(len(data.len)):
+                loss = torch.nn.MSELoss()
+        loss.backward()
+        self.optim.step()
+        return
 
 class CPC_1(nn.Module):
     def __init__(self):
@@ -26,6 +36,16 @@ class CPCI_Action_1(nn.Module):
         self.action_gru = actionGRU()
         self.mlp = MLP()
         self.eval_mlp = evalMLP()
+        self.optim = None
+    
+    def update(self, data_batch):
+        self.optim.zero_grad()
+        for data in data_batch:
+            for i in range(len(data.len)):
+                loss = torch.nn.MSELoss()
+        loss.backward()
+        self.optim.step()
+        return
 
 class CPCI_Action_30(nn.Module):
     def __init__(self):
