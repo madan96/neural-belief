@@ -4,10 +4,11 @@ from __future__ import print_function
 
 import argparse
 import deepmind_lab
+import copy
 
 from agent import RandomAgent
 from collections import deque
-from model import FP
+from model import FP, CPCI_Action_1
 from memory import MemoryBuffer, SubTrajectory
 from tqdm import tqdm
 
@@ -18,10 +19,10 @@ def replay(replay_buffer):
     replay_buffer.sample(64)
     return
 
-def train_FP(env, args):
-    model = FP()
+def train_CPCI_Action_1(env, args):
+    model = CPCI_Action_1()
     model.optim = torch.optim.Adam(model.parameters(), lr=0.0005)
-    replay_buffer = MemoryBuffer(int(5e1))
+    replay_buffer = MemoryBuffer(int(1e1))
 
     agent = RandomAgent(env.action_spec())
     max_steps = int(5e3)
@@ -43,13 +44,20 @@ def train_FP(env, args):
             new_rgb, new_pos, new_orientation = env.observations()['RGB'], env.observations()['DEBUG.POS.TRANS'], env.observations()['DEBUG.POS.ROT']
         
         if sub_trajectory.len == 100:
-            replay_buffer.add(sub_trajectory)
+            tmp = copy.deepcopy(sub_trajectory)
+            # Send initial belief to replay buffer
+            o_0 = torch.from_numpy(tmp.rgb[0]).type(torch.FloatTensor).unsqueeze(0)
+            a_0 = torch.from_numpy(tmp.action[0]).type(torch.FloatTensor).unsqueeze(0)
+            z_0 = model.conv(o_0)
+            bgru_input = torch.cat((z_0, a_0), dim=1)
+            _, tmp.belief = model.belief_gru.gru1(torch.unsqueeze(bgru_input, 1))
+            replay_buffer.add(tmp)
             sub_trajectory.clear()
 
         sub_trajectory.add(rgb, pos, orientation, action, new_rgb, new_pos, new_orientation)
 
         # Train using replay_buffer
-        if step > replay_buffer.maxSize * 100:
+        if step >= replay_buffer.maxSize * 100:
             train_batch = replay_buffer.sample(64)
             if None in train_batch:
                 raise Exception("Training batch contains None object")
@@ -62,7 +70,7 @@ def train_FP(env, args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--model', type=str, default='FP',
+    parser.add_argument('--model', type=str, default='CPCI_Action_1',
                         help='Model')
     parser.add_argument('--width', type=int, default=84,
                         help='Horizontal size of the observations')
@@ -100,5 +108,5 @@ if __name__ == "__main__":
     # print (env.observations())
 
 
-    if args.model == 'FP':
-        train_FP(env, args)
+    if args.model == 'CPCI_Action_1':
+        train_CPCI_Action_1(env, args)

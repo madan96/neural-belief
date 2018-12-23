@@ -76,6 +76,7 @@ class SubTrajectory(object):
 		self.new_rgb = deque(maxlen=size)
 		self.new_pos = deque(maxlen=size)
 		self.new_ori = deque(maxlen=size)
+		self.belief = None
 		self.maxSize = size
 		self.len = 0
 	
