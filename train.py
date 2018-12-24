@@ -19,13 +19,12 @@ def replay(replay_buffer):
     replay_buffer.sample(64)
     return
 
-def train_CPCI_Action_1(env, args):
-    model = CPCI_Action_1()
+def train(env, model, args):
     model.optim = torch.optim.Adam(model.parameters(), lr=0.0005)
     replay_buffer = MemoryBuffer(int(1e1))
 
     agent = RandomAgent(env.action_spec())
-    max_steps = int(5e3)
+    max_steps = int(1.1e3)
     env.reset()
 
     step = 0
@@ -46,8 +45,8 @@ def train_CPCI_Action_1(env, args):
         if sub_trajectory.len == 100:
             tmp = copy.deepcopy(sub_trajectory)
             # Send initial belief to replay buffer
-            o_0 = torch.from_numpy(tmp.rgb[0]).type(torch.FloatTensor).unsqueeze(0)
-            a_0 = torch.from_numpy(tmp.action[0]).type(torch.FloatTensor).unsqueeze(0)
+            o_0 = torch.from_numpy(tmp.new_rgb[0]).to(dtype=torch.float32).unsqueeze(0)
+            a_0 = torch.from_numpy(tmp.action[0]).to(dtype=torch.float32).unsqueeze(0)
             z_0 = model.conv(o_0)
             bgru_input = torch.cat((z_0, a_0), dim=1)
             _, tmp.belief = model.belief_gru.gru1(torch.unsqueeze(bgru_input, 1))
@@ -109,4 +108,8 @@ if __name__ == "__main__":
 
 
     if args.model == 'CPCI_Action_1':
-        train_CPCI_Action_1(env, args)
+        model = CPCI_Action_1()
+    elif args.model == 'FP':
+        model = FP()
+    
+    train(env, model, args)
