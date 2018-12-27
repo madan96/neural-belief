@@ -39,7 +39,7 @@ class actionGRU(nn.Module):
     def __init__(self):
         super(actionGRU, self).__init__()
         # Check input size
-        self.gru1 = nn.GRU(512, 512, batch_first=True)
+        self.gru1 = nn.GRU(7, 512, batch_first=True)
     
     def forward(self, x):
         out = self.gru1(x)

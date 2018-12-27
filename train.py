@@ -8,7 +8,7 @@ import copy
 
 from agent import RandomAgent
 from collections import deque
-from model import FP, CPCI_Action_1
+from model import FP, CPCI_Action_1, CPCI_Action_30
 from memory import MemoryBuffer, SubTrajectory
 from tqdm import tqdm
 
@@ -72,7 +72,7 @@ def train(env, model, args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--model', type=str, default='FP',
+    parser.add_argument('--model', type=str, default='CPCI_Action_30',
                         help='Model')
     parser.add_argument('--width', type=int, default=84,
                         help='Horizontal size of the observations')
@@ -115,5 +115,7 @@ if __name__ == "__main__":
         model = CPCI_Action_1()
     elif args.model == 'FP':
         model = FP()
+    elif args.model == 'CPCI_Action_30':
+        model = CPCI_Action_30()
     
     train(env, model, args)

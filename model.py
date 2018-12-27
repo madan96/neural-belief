@@ -1,4 +1,6 @@
 import numpy as np
+import random
+
 import torch
 import torch.nn as nn
 from network_modules import *
@@ -6,7 +8,9 @@ import torchvision.utils as u
 from PIL import Image
 # from skimage.viewer import ImageViewer
 
-# TODO: seperate optimizers for eval_MLP
+# TODO: evalMLP should return softmax(x,y,theta),
+# grid of sigmoids of past (x, y, theta) and obj-
+# grid of sigmoids of obj (x, y, theta)
 
 class FP(nn.Module):
     def __init__(self):
@@ -81,26 +85,28 @@ class CPCI_Action_1(nn.Module):
 
     def update(self, data_batch):
         self.optim.zero_grad()
-        obs_batch = np.asarray([np.array(sub_traj.new_rgb) for sub_traj in data_batch])
-        obs_batch= torch.from_numpy(obs_batch).to(dtype=torch.float32)
-        h_0_batch = [sub_traj.belief for sub_traj in data_batch]
-        z_batch = self.conv(obs_batch.view(-1, 3, 84, 84))
-        z_batch = z_batch.view(64, 100, 512)
-        a_batch = np.asarray([np.array(sub_traj.action) for sub_traj in data_batch])
-        a_batch = torch.from_numpy(a_batch).to(dtype=torch.float32)
-        input_batch = torch.cat((z_batch, a_batch), dim=2)
-        beliefs = []
-        
         """
+        TODO:
         * Belief calculation
         * Refer CPCI Algorithm
         * Check loss formulation
+        * Sample negative examples for discriminator
         """
-        
-        for i in range(len(data_batch)):
-            h_0 = h_0_batch[i]
-            z_a = input_batch[i].unsqueeze(0)
-            beliefs.append(self.belief_gru.gru1(z_a, h_0)[0])
+        z_batch = []
+        beliefs = []
+        for i, data in enumerate(data_batch):
+            hidden = data.belief
+            obs_batch = np.array(data.new_rgb)
+            obs_batch= torch.from_numpy(obs_batch).type('torch.FloatTensor')/255.
+            a_batch = np.array(data.action)
+            a_batch = torch.from_numpy(a_batch).to(dtype=torch.float32)
+            z_t = self.conv(obs_batch)
+            z_a = torch.cat((z_t, a_tm1), dim=1).unsqueeze(0)
+            b_t, _ = self.belief_gru.gru1(z_a, hidden)
+
+            z_batch.append(z_t)
+            beliefs.append(b_t.squeeze(0))
+        z_batch = torch.stack(z_batch)
         beliefs = torch.stack(beliefs)
         
         # for data in data_batch:
@@ -120,7 +126,39 @@ class CPCI_Action_30(nn.Module):
         self.mlp = nn.ModuleList(cpc_clf)
         self.eval_mlp = evalMLP()
         self.optim = None
+        self.pos_optim = None
     
-    def forward(self, data_batch):
-        return
+    def forward(self, b_t, a_t, z_tp1, f): # z_tp1_neg
+        a_gru, _ = self.action_gru.gru1(a_t.unsqueeze(0), b_t.unsqueeze(0))
+        z_a_gru_pos = torch.cat((z_tp1_pos, a_gru[0]), dim=1)
+        pred_positive = torch.stack([self.mlp[i](z_a_gru_pos[i].unsqueeze(0)) for i in range(f)], 1)
+        # z_a_gru_neg = torch.cat((z_tp1_neg, a_gru[0]), dim=1)
+        # pred_negative = torch.stack([self.mlp[i](z_a_gru_neg[i].unsqueeze(0)) for i in range(f)], 1)
+        return pred_positive #, pred_negative
 
+    def update(self, data_batch):
+        z_batch = []
+        beliefs = []
+        for i, data in enumerate(data_batch):
+            hidden = data.belief
+            obs_batch = np.array(data.new_rgb)
+            obs_batch= torch.from_numpy(obs_batch).type('torch.FloatTensor')/255.
+            a_batch = np.array(data.action)
+            a_batch = torch.from_numpy(a_batch).to(dtype=torch.float32)
+            z_t = self.conv(obs_batch)
+            z_a = torch.cat((z_t, a_batch), dim=1).unsqueeze(0)
+            b_t, _ = self.belief_gru.gru1(z_a, hidden)
+
+            z_batch.append(z_t)
+            beliefs.append(b_t.squeeze(0))
+        z_batch = torch.stack(z_batch)
+        beliefs = torch.stack(beliefs)
+
+        for i, data in enumerate(data_batch):
+            a_batch = np.array(data.action)
+            a_batch = torch.from_numpy(a_batch).to(dtype=torch.float32)
+            for j in range(data.len - 30):
+                f = random.randint(1,30)
+                # TODO: Sample negative observations for the discriminator
+                mlp_output = self.forward(beliefs[i][j].unsqueeze(0), a_batch[j+1:j+f+1], z_batch[i][j+1:j+f+1], f)
+                # TODO: Add loss calculation and optim step
