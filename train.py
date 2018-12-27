@@ -21,10 +21,10 @@ def replay(replay_buffer):
 
 def train(env, model, args):
     model.optim = torch.optim.Adam(model.parameters(), lr=0.0005)
-    replay_buffer = MemoryBuffer(int(1e1))
+    replay_buffer = MemoryBuffer(int(args.batch))
 
     agent = RandomAgent(env.action_spec())
-    max_steps = int(1.1e3)
+    max_steps = args.num_steps
     env.reset()
 
     step = 0
@@ -56,7 +56,7 @@ def train(env, model, args):
         sub_trajectory.add(rgb, pos, orientation, action, new_rgb, new_pos, new_orientation)
 
         # Train using replay_buffer
-        if step >= replay_buffer.maxSize * 100:
+        if step >= args.batch * 100:
             train_batch = replay_buffer.sample(64)
             if None in train_batch:
                 raise Exception("Training batch contains None object")
@@ -77,13 +77,15 @@ if __name__ == "__main__":
                         help='Vertical size of the observations')
     parser.add_argument('--fps', type=int, default=60,
                         help='Number of frames per second')
+    parser.add_argument('--batch', type=int, default=64,
+                        help='Minibatch size for subtrajectories')
     parser.add_argument('--level', type=str, default='seekavoid_arena_01',
                         help='The environment level script to load')
 
     parser.add_argument('--tau', type=int, default=0.99, help='Training hyperparameter')
     parser.add_argument('--gamma', type=int, default=0.99, help='Discounted factor')
     parser.add_argument('--clip-grad-norm', type=int, default=1.0, help='Clip gradient')
-    parser.add_argument('--num-episodes', type=int, default=100, help='Number of training episodes')
+    parser.add_argument('--num-steps', type=int, default=int(8e3), help='Number of training episodes')
 
     """
     Levels to be tested
@@ -103,8 +105,6 @@ if __name__ == "__main__":
         'height': str(args.height)
     }, renderer='hardware')
     env.reset()
-
-    # print (env.observations())
 
 
     if args.model == 'CPCI_Action_1':

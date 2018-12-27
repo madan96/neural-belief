@@ -43,10 +43,11 @@ class MemoryBuffer:
 		:param count: batch size
 		:return: batch (numpy array)
 		"""
-
+		# Start sampling after batches are >= mini-batch size
+		# For this we need to sample from 0:data_added
 		batch = []
 		count = min(count, self.len)
-		batch = random.sample(self.buffer.data, count)
+		batch = random.sample(self.buffer.data[0:self.buffer.length], count)
 		return batch		
 
 	def len(self):

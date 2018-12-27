@@ -49,9 +49,8 @@ class CPCI_Action_1(nn.Module):
         obs_batch = np.asarray([np.array(sub_traj.new_rgb) for sub_traj in data_batch])
         obs_batch= torch.from_numpy(obs_batch).to(dtype=torch.float32)
         h_0_batch = [sub_traj.belief for sub_traj in data_batch]
-        obs_batch= torch.from_numpy(obs_batch).to(dtype=torch.float32)
         z_batch = self.conv(obs_batch.view(-1, 3, 84, 84))
-        z_batch = z_batch.view(10, 100, 512)
+        z_batch = z_batch.view(64, 100, 512)
         a_batch = np.asarray([np.array(sub_traj.action) for sub_traj in data_batch])
         a_batch = torch.from_numpy(a_batch).to(dtype=torch.float32)
         input_batch = torch.cat((z_batch, a_batch), dim=2)
