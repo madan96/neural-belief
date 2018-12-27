@@ -61,14 +61,17 @@ class MLP(nn.Module):
 class BasicDeconv(nn.Module):
     def __init__(self):
         super(BasicDeconv, self).__init__()
+        self.fc1 = nn.Linear(519, 3136)
         self.deconv1 = nn.ConvTranspose2d(64, 64, kernel_size=3, stride=1)
         self.relu1 = nn.ReLU(inplace=True)
         self.deconv2 = nn.ConvTranspose2d(64, 32, kernel_size=4, stride=2)
         self.relu2 = nn.ReLU(inplace=True)
-        self.deconv3 = nn.ConvTranspose2d(64, 3, kernel_size=8, stride=4)
+        self.deconv3 = nn.ConvTranspose2d(32, 3, kernel_size=8, stride=4)
         self.relu3 = nn.ReLU(inplace=True)
     
     def forward(self, x):
+        x = self.fc1(x)
+        x = x.view(-1, 64, 7, 7)
         out = self.relu1(self.deconv1(x))
         out = self.relu2(self.deconv2(out))
         out = self.relu3(self.deconv3(out))
@@ -78,9 +81,9 @@ class evalMLP(nn.Module):
     def __init__(self):
         super(evalMLP, self).__init__()
         # Check input size
-        self.hidden1 = nn.Linear(1024, 512)
+        self.hidden1 = nn.Linear(512, 512)
         self.relu1 = nn.ReLU()
-        self.hidden2 = nn.Linear(512, 512)
+        self.hidden2 = nn.Linear(512, 6)
         self.relu2 = nn.ReLU()
     
     def forward(self, x):

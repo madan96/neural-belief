@@ -15,12 +15,15 @@ from tqdm import tqdm
 import numpy as np
 import torch
 
+from itertools import islice
+
 def replay(replay_buffer):
     replay_buffer.sample(64)
     return
 
 def train(env, model, args):
-    model.optim = torch.optim.Adam(model.parameters(), lr=0.0005)
+    model.optim = torch.optim.Adam(islice(model.parameters(), 20), lr=0.0005)
+    model.pos_optim = torch.optim.Adam(islice(model.parameters(), 20, None), lr=0.0005)
     replay_buffer = MemoryBuffer(int(args.batch))
 
     agent = RandomAgent(env.action_spec())
@@ -69,7 +72,7 @@ def train(env, model, args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--model', type=str, default='CPCI_Action_1',
+    parser.add_argument('--model', type=str, default='FP',
                         help='Model')
     parser.add_argument('--width', type=int, default=84,
                         help='Horizontal size of the observations')
@@ -79,6 +82,7 @@ if __name__ == "__main__":
                         help='Number of frames per second')
     parser.add_argument('--batch', type=int, default=64,
                         help='Minibatch size for subtrajectories')
+
     parser.add_argument('--level', type=str, default='seekavoid_arena_01',
                         help='The environment level script to load')
 
