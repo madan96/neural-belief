@@ -44,6 +44,9 @@ class CPCI_Action_1(nn.Module):
         self.eval_mlp = evalMLP()
         self.optim = None
     
+    def forward(self, data_batch):
+        return
+
     def update(self, data_batch):
         self.optim.zero_grad()
         obs_batch = np.asarray([np.array(sub_traj.new_rgb) for sub_traj in data_batch])
@@ -78,4 +81,14 @@ class CPCI_Action_1(nn.Module):
 class CPCI_Action_30(nn.Module):
     def __init__(self):
         super(CPCI_Action_30, self).__init__()
+        self.conv = ConvBasic()
+        self.belief_gru = beliefGRU()
+        self.action_gru = actionGRU()
+        cpc_clf = [MLP() for i in range(30)]
+        self.mlp = nn.ModuleList(cpc_clf)
+        self.eval_mlp = evalMLP()
+        self.optim = None
+    
+    def forward(self, data_batch):
+        return
 
