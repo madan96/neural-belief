@@ -128,7 +128,7 @@ class CPCI_Action_30(nn.Module):
         self.optim = None
         self.pos_optim = None
     
-    def forward(self, b_t, a_t, z_tp1, f): # z_tp1_neg
+    def forward(self, b_t, a_t, z_tp1_pos, f): # z_tp1_neg
         a_gru, _ = self.action_gru.gru1(a_t.unsqueeze(0), b_t.unsqueeze(0))
         z_a_gru_pos = torch.cat((z_tp1_pos, a_gru[0]), dim=1)
         pred_positive = torch.stack([self.mlp[i](z_a_gru_pos[i].unsqueeze(0)) for i in range(f)], 1)
