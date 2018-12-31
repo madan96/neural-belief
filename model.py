@@ -3,8 +3,10 @@ import random
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from network_modules import *
 import torchvision.utils as u
+import utils
 from PIL import Image
 # from skimage.viewer import ImageViewer
 
@@ -128,17 +130,18 @@ class CPCI_Action_30(nn.Module):
         self.optim = None
         self.pos_optim = None
     
-    def forward(self, b_t, a_t, z_tp1_pos, f): # z_tp1_neg
+    def forward(self, b_t, a_t, z_tp1_pos, z_tp1_neg, f):
         a_gru, _ = self.action_gru.gru1(a_t.unsqueeze(0), b_t.unsqueeze(0))
         z_a_gru_pos = torch.cat((z_tp1_pos, a_gru[0]), dim=1)
         pred_positive = torch.stack([self.mlp[i](z_a_gru_pos[i].unsqueeze(0)) for i in range(f)], 1)
-        # z_a_gru_neg = torch.cat((z_tp1_neg, a_gru[0]), dim=1)
-        # pred_negative = torch.stack([self.mlp[i](z_a_gru_neg[i].unsqueeze(0)) for i in range(f)], 1)
-        return pred_positive #, pred_negative
+        z_a_gru_neg = torch.cat((z_tp1_neg, a_gru[0]), dim=1)
+        pred_negative = torch.stack([self.mlp[i](z_a_gru_neg[i].unsqueeze(0)) for i in range(f)], 1)
+        return pred_positive[0], pred_negative[0]
 
     def update(self, data_batch):
         z_batch = []
         beliefs = []
+        loss_cr = nn.BCELoss()
         for i, data in enumerate(data_batch):
             hidden = data.belief
             obs_batch = np.array(data.new_rgb)
@@ -154,11 +157,19 @@ class CPCI_Action_30(nn.Module):
         z_batch = torch.stack(z_batch)
         beliefs = torch.stack(beliefs)
 
+        loss_pos, loss_neg = 0, 0
         for i, data in enumerate(data_batch):
             a_batch = np.array(data.action)
             a_batch = torch.from_numpy(a_batch).to(dtype=torch.float32)
             for j in range(data.len - 30):
                 f = random.randint(1,30)
-                # TODO: Sample negative observations for the discriminator
-                mlp_output = self.forward(beliefs[i][j].unsqueeze(0), a_batch[j+1:j+f+1], z_batch[i][j+1:j+f+1], f)
+                z_batch_neg = utils.sample_negatives(z_batch, i, f, len(data_batch))
+                pred_positive, pred_negative = self.forward(beliefs[i][j:j+1], a_batch[j+1:j+f+1], z_batch[i][j+1:j+f+1], z_batch_neg, f)
                 # TODO: Add loss calculation and optim step
+                loss_pos += loss_cr(torch.sigmoid(pred_positive.squeeze(0)), torch.ones((f, 1)))/70
+                loss_neg += loss_cr(torch.sigmoid(pred_negative), torch.zeros((f, 1)))/70
+        loss = (loss_pos + loss_neg)/(2*len(data_batch))
+        print ("Loss: ", loss.data)
+        loss.backward()
+        self.optim.step()
+        
