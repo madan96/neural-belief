@@ -23,7 +23,7 @@ def replay(replay_buffer):
 
 def train(env, model, args):
     model.optim = torch.optim.Adam(islice(model.parameters(), 20), lr=0.0005)
-    model.pos_optim = torch.optim.Adam(islice(model.parameters(), 20, None), lr=0.0005)
+    model.pos_optim = torch.optim.Adam(model.eval_mlp.parameters(), lr=0.0005)
     replay_buffer = MemoryBuffer(int(args.batch))
 
     agent = RandomAgent(env.action_spec())
