@@ -48,8 +48,8 @@ def train(env, model, args):
         if sub_trajectory.len == 100:
             tmp = copy.deepcopy(sub_trajectory)
             # Send initial belief to replay buffer
-            o_0 = torch.from_numpy(tmp.new_rgb[0]).to(dtype=torch.float32).unsqueeze(0)
-            a_0 = torch.from_numpy(tmp.action[0]).to(dtype=torch.float32).unsqueeze(0)
+            o_0 = torch.from_numpy(tmp.new_rgb[0]).to(dtype=torch.float32).unsqueeze(0).to(device)
+            a_0 = torch.from_numpy(tmp.action[0]).to(dtype=torch.float32).unsqueeze(0).to(device)
             z_0 = model.conv(o_0)
             bgru_input = torch.cat((z_0, a_0), dim=1)
             _, tmp.belief = model.belief_gru.gru1(torch.unsqueeze(bgru_input, 1))
@@ -82,7 +82,8 @@ if __name__ == "__main__":
                         help='Number of frames per second')
     parser.add_argument('--batch', type=int, default=64,
                         help='Minibatch size for subtrajectories')
-
+    parser.add_argument('--no-cuda', action='store_true', default=False,
+                    help='disables CUDA training')
     parser.add_argument('--level', type=str, default='seekavoid_arena_01',
                         help='The environment level script to load')
 
@@ -101,6 +102,7 @@ if __name__ == "__main__":
     """
 
     args = parser.parse_args()
+    device = torch.device("cuda:0" if not args.no_cuda and torch.cuda.is_available() else "cpu")
     
     env = deepmind_lab.Lab(args.level, ['RGB', 'DEBUG.POS.TRANS', 'DEBUG.POS.ROT'],
     config={
@@ -118,4 +120,5 @@ if __name__ == "__main__":
     elif args.model == 'CPCI_Action_30':
         model = CPCI_Action_30()
     
-    train(env, model, args)
+    model.device = device
+    train(env, model.to(device), args)
