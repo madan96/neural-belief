@@ -131,16 +131,16 @@ class CPCI_Action_30(nn.Module):
         self.optim = None
         self.pos_optim = None
     
-    def forward(self, b_t, a_t, z_tp1_pos, z_tp1_neg, init_pos, f):
+    def forward(self, b_t, a_t, z_tp1_pos, z_tp1_neg, init_pos_ori, f):
         a_gru, _ = self.action_gru.gru1(a_t.unsqueeze(0), b_t.unsqueeze(0))
         z_a_gru_pos = torch.cat((z_tp1_pos, a_gru[0]), dim=1)
         pred_positive = torch.stack([self.mlp[i](z_a_gru_pos[i].unsqueeze(0)) for i in range(f)], 1)
         z_a_gru_neg = torch.cat((z_tp1_neg, a_gru[0]), dim=1)
         pred_negative = torch.stack([self.mlp[i](z_a_gru_neg[i].unsqueeze(0)) for i in range(f)], 1)
-        eval_input = torch.cat((b_t.detach(), init_pos), dim=1)
-        pred_xy = self.eval_mlp(eval_input)
+        eval_input = torch.cat((b_t.detach(), init_pos_ori), dim=1)
+        pred_xytheta = self.eval_mlp(eval_input)
         
-        return pred_positive[0], pred_negative[0], pred_xy
+        return pred_positive[0], pred_negative[0], pred_xytheta
 
     def update(self, data_batch):
         z_batch = []
@@ -166,20 +166,23 @@ class CPCI_Action_30(nn.Module):
         for i, data in enumerate(data_batch):
             a_batch = np.array(data.action)
             a_batch = torch.from_numpy(a_batch).to(dtype=torch.float32)
+
             init_pos = utils.get_pos_grid(data.pos[0][:2])
             init_pos = init_pos.view(-1, 90)
+            init_ori = utils.discretize_orientation(data.ori[0][1])
+            init_pos_ori = torch.cat((init_pos, init_ori), dim=1)
             loss_evalmlp = 0
             for j in range(data.len - 30):
                 f = random.randint(1,30)
                 z_batch_neg = utils.sample_negatives(z_batch, i, f, len(data_batch))
                 curr_pos_gt = utils.get_pos_grid(data.new_pos[j][:2]).view(-1, 90)
-                curr_pos_gt = curr_pos_gt
-                pred_positive, pred_negative, pred_xy = self.forward(beliefs[i][j:j+1], a_batch[j+1:j+f+1], z_batch[i][j+1:j+f+1], z_batch_neg, init_pos, f)
+                curr_ori_gt = utils.discretize_orientation(data.new_ori[j][1])
+                curr_pos_ori_gt = torch.cat((curr_pos_gt, curr_ori_gt), dim=1)
+                pred_positive, pred_negative, pred_xytheta = self.forward(beliefs[i][j:j+1], a_batch[j+1:j+f+1], z_batch[i][j+1:j+f+1], z_batch_neg, init_pos_ori, f)
 
-                # TODO: Add loss calculation and optim step
                 loss_pos += loss_cr(torch.sigmoid(pred_positive.squeeze(0)), torch.ones((f, 1)))/70
                 loss_neg += loss_cr(torch.sigmoid(pred_negative), torch.zeros((f, 1)))/70
-                loss_evalmlp += loss_eval(pred_xy, curr_pos_gt)
+                loss_evalmlp += loss_eval(pred_xytheta, curr_pos_ori_gt)
             loss_evalmlp = loss_evalmlp/(data.len - 30)
             self.pos_optim.zero_grad()
             loss_evalmlp.backward()
