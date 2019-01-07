@@ -80,10 +80,10 @@ class BasicDeconv(nn.Module):
 class evalMLP(nn.Module):
     def __init__(self):
         super(evalMLP, self).__init__()
-        # Check input size
-        self.hidden1 = nn.Linear(512, 512)
+        # TODO: Input size - b_t + grid_size[0]*grid_size[1]
+        self.hidden1 = nn.Linear(602, 512)
         self.relu1 = nn.ReLU()
-        self.hidden2 = nn.Linear(512, 6)
+        self.hidden2 = nn.Linear(512, 90)
         self.relu2 = nn.ReLU()
     
     def forward(self, x):

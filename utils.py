@@ -1,3 +1,4 @@
+import math
 import numpy as np
 import random
 import torch
@@ -27,6 +28,6 @@ def get_pos_grid(position):
     grid_x = math.floor((pos_y + offset_y)/fac_y)
     grid_y = math.floor((pos_x + offset_x)/fac_x)
 
-    pos_grid[grid_x][grid_y] = 1
+    pos_grid[int(grid_x)][int(grid_y)] = 1
 
-    return pos_grid
+    return torch.from_numpy(pos_grid).to(dtype=torch.float32)
