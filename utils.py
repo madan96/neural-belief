@@ -31,3 +31,11 @@ def get_pos_grid(position):
     pos_grid[int(grid_x)][int(grid_y)] = 1
 
     return torch.from_numpy(pos_grid).to(dtype=torch.float32)
+
+def discretize_orientation(orientation):
+    ori_grid = np.zeros((1,4))
+    if orientation/math.fabs(orientation) == -1:
+        orientation = 360 + orientation
+    index = round(orientation / 90) % 4
+    ori_grid[0][int(index)] = 1
+    return torch.from_numpy(ori_grid).to(dtype=torch.float32)
