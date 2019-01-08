@@ -20,6 +20,10 @@ import torch
 import multiprocessing as mp
 from multiprocessing.managers import BaseManager, NamespaceProxy
 from multiprocessing import Manager
+
+import resource
+rlimit = resource.getrlimit(resource.RLIMIT_NOFILE)
+resource.setrlimit(resource.RLIMIT_NOFILE, (2048, rlimit[1]))
 # mp.set_start_method('spawn')
 # mp = mp.get_context('forkserver')
 pbar = tqdm(total=int(8e3))
@@ -37,9 +41,6 @@ def run_rollout(model, step, q, args):
         'height': str(args.height)
     }, renderer='hardware')
     env.reset()
-
-    model.optim = torch.optim.Adam(islice(model.parameters(), 20), lr=0.0005)
-    model.pos_optim = torch.optim.Adam(model.eval_mlp.parameters(), lr=0.0005)
 
     agent = RandomAgent(env.action_spec())
     max_steps = args.num_steps
@@ -72,8 +73,10 @@ def run_rollout(model, step, q, args):
         step.value += 1
         q.put(global_step)
 
-def train_model(model):
+def train_model(model, device):
     global replay_buffer
+    model.to(device)
+    print (next(model.conv.parameters()).is_cuda)
     model.pos_optim = torch.optim.Adam(model.eval_mlp.parameters(), lr=0.0005)
     batch = []
     while len(replay_buffer) < 10:
@@ -90,7 +93,7 @@ def listener(q, args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--model', type=str, default='FP',
+    parser.add_argument('--model', type=str, default='CPCI_Action_30',
                         help='Model')
     parser.add_argument('--width', type=int, default=84,
                         help='Horizontal size of the observations')
@@ -125,6 +128,10 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     # device = torch.device("cuda:0" if not args.no_cuda and torch.cuda.is_available() else "cpu")
+    if args.no_cuda:
+        device = "cpu"
+    else:
+        device = "cuda:0"
 
     if args.model == 'CPCI_Action_1':
         model = CPCI_Action_1()
@@ -134,17 +141,17 @@ if __name__ == "__main__":
         model = CPCI_Action_30()
 
     setproctitle('train_mproc [MASTER]')
-    # model.device = device
+    model.device = device
     # model.share_memory()
-    model.belief_gru.share_memory()
     model.optim = torch.optim.Adam(islice(model.parameters(), 20), lr=0.0001)
     q = mp.Queue()
  
-    proc = mp.Process(target=train_model, args=(model,))
+    proc = mp.Process(target=train_model, args=(model, device))
     proc.start()
     proc_bar = mp.Process(target=listener, args=(q, args))
     proc_bar.start()
 
+    model.belief_gru.share_memory()
     step = mp.Value('l', 0)
     workers = []
     workers = [mp.Process(target=run_rollout, args=(model, step, q, args,)) for i in range(3)]

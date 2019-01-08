@@ -149,14 +149,14 @@ class CPCI_Action_30(nn.Module):
         loss_cr = nn.BCELoss()
         loss_eval = nn.BCELoss()
         for i, data in enumerate(data_batch):
-            hidden = data.belief
+            hidden = data.belief.to(self.device)
             obs_batch = np.array(data.new_rgb)
             obs_batch = torch.from_numpy(obs_batch).type('torch.FloatTensor')/255.
             obs_batch = obs_batch.to(self.device)
             a_batch = np.array(data.action)
             a_batch = torch.from_numpy(a_batch).to(dtype=torch.float32).to(self.device)
             z_t = self.conv(obs_batch)
-            z_a = torch.cat((z_t, a_batch), dim=1).unsqueeze(0)
+            z_a = torch.cat((z_t, a_batch), dim=1).unsqueeze(0).to(self.device)
             b_t, _ = self.belief_gru.gru1(z_a, hidden)
 
             z_batch.append(z_t)
