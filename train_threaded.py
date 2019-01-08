@@ -9,27 +9,37 @@ import copy
 from agent import RandomAgent
 from collections import deque
 from model import FP, CPCI_Action_1, CPCI_Action_30
-from memory import MemoryBuffer, SubTrajectory
+from memory import MemoryBuffer, SubTrajectory, sample_minibatch
 from tqdm import tqdm
 
 from setproctitle import setproctitle
 from itertools import islice
-from multi_tqdm import parallel_process
 
 import numpy as np
 import torch
-import torch.multiprocessing as mp
-
-replay_buffer = MemoryBuffer(64)
-# pbar = tqdm(total=int(8e3))
+import multiprocessing as mp
+from multiprocessing.managers import BaseManager, NamespaceProxy
+from multiprocessing import Manager
+# mp.set_start_method('spawn')
+# mp = mp.get_context('forkserver')
+pbar = tqdm(total=int(8e3))
 
 global_step = 1
+manager = Manager()
+replay_buffer = manager.list()
 
-def train(env, model, step, q, args):
+def run_rollout(model, step, q, args):
     global replay_buffer
-    model.optim = torch.optim.Adam(islice(model.parameters(), 20), lr=0.001)
-    model.pos_optim = torch.optim.Adam(islice(model.parameters(), 20, None), lr=0.0005)
-    replay_buffer = MemoryBuffer(int(args.batch))
+    env = deepmind_lab.Lab(args.level, ['RGB', 'DEBUG.POS.TRANS', 'DEBUG.POS.ROT'],
+    config={
+        'fps': str(args.fps),
+        'width': str(args.width),
+        'height': str(args.height)
+    }, renderer='hardware')
+    env.reset()
+
+    model.optim = torch.optim.Adam(islice(model.parameters(), 20), lr=0.0005)
+    model.pos_optim = torch.optim.Adam(model.eval_mlp.parameters(), lr=0.0005)
 
     agent = RandomAgent(env.action_spec())
     max_steps = args.num_steps
@@ -55,29 +65,32 @@ def train(env, model, step, q, args):
             z_0 = model.conv(o_0)
             bgru_input = torch.cat((z_0, a_0), dim=1)
             _, tmp.belief = model.belief_gru.gru1(torch.unsqueeze(bgru_input, 1))
-            replay_buffer.add(tmp)
+            replay_buffer.append(tmp)
             sub_trajectory.clear()
 
         sub_trajectory.add(rgb, pos, orientation, action, new_rgb, new_pos, new_orientation)
-
-        # Train using replay_buffer
-        if step.value >= args.batch * 100:
-            train_batch = replay_buffer.sample(64)
-            if None in train_batch:
-                raise Exception("Training batch contains None object")
-            model.update(train_batch)
-
         step.value += 1
         q.put(global_step)
 
-def listener(q):
-    pbar = tqdm(total = int(8e3))
+def train_model(model):
+    global replay_buffer
+    model.pos_optim = torch.optim.Adam(model.eval_mlp.parameters(), lr=0.0005)
+    batch = []
+    while len(replay_buffer) < 10:
+        continue
+    while True:
+        batch = sample_minibatch(replay_buffer, 10)
+        print (len(replay_buffer))
+        model.update(batch)
+
+def listener(q, args):
+    pbar = tqdm(total = args.num_steps)
     for item in iter(q.get, None):
         pbar.update()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--model', type=str, default='CPCI_Action_1',
+    parser.add_argument('--model', type=str, default='FP',
                         help='Model')
     parser.add_argument('--width', type=int, default=84,
                         help='Horizontal size of the observations')
@@ -89,11 +102,14 @@ if __name__ == "__main__":
                         help='The environment level script to load')
     parser.add_argument('--batch', type=int, default=64,
                         help='Minibatch size for subtrajectories')
+    parser.add_argument('--no-cuda', action='store_true', default=False,
+                    help='disables CUDA training')
+
 
     parser.add_argument('--tau', type=int, default=0.99, help='Training hyperparameter')
     parser.add_argument('--gamma', type=int, default=0.99, help='Discounted factor')
     parser.add_argument('--clip-grad-norm', type=int, default=1.0, help='Clip gradient')
-    parser.add_argument('--num-steps', type=int, default=int(8e3), help='Number of training episodes')
+    parser.add_argument('--num-steps', type=int, default=int(5e6), help='Number of training episodes')
 
     """
     Levels to be tested
@@ -104,15 +120,11 @@ if __name__ == "__main__":
     terrain: contributed/dmlab30/natlab_fixed_large_map
     """
 
+    # For sharing belief gru across processes, seperate it from model
+    # and use share_memory_() for sharing it across processes
+
     args = parser.parse_args()
-    
-    env = deepmind_lab.Lab(args.level, ['RGB', 'DEBUG.POS.TRANS', 'DEBUG.POS.ROT'],
-    config={
-        'fps': str(args.fps),
-        'width': str(args.width),
-        'height': str(args.height)
-    }, renderer='hardware')
-    env.reset()
+    # device = torch.device("cuda:0" if not args.no_cuda and torch.cuda.is_available() else "cpu")
 
     if args.model == 'CPCI_Action_1':
         model = CPCI_Action_1()
@@ -122,27 +134,25 @@ if __name__ == "__main__":
         model = CPCI_Action_30()
 
     setproctitle('train_mproc [MASTER]')
-    
-    model.share_memory()
+    # model.device = device
+    # model.share_memory()
+    model.belief_gru.share_memory()
     model.optim = torch.optim.Adam(islice(model.parameters(), 20), lr=0.0001)
     q = mp.Queue()
  
-    proc = mp.Process(target=listener, args=(q,))
+    proc = mp.Process(target=train_model, args=(model,))
     proc.start()
-    
+    proc_bar = mp.Process(target=listener, args=(q, args))
+    proc_bar.start()
+
     step = mp.Value('l', 0)
     workers = []
-    workers = [mp.Process(target=train, args=(env, model, step, q, args,)) for i in range(32)]
+    workers = [mp.Process(target=run_rollout, args=(model, step, q, args,)) for i in range(3)]
 
     for worker in workers:
         worker.start()
     for worker in workers:
         worker.join()
+
     proc.join()
-    # q = mp.Queue(10)
-
-    # arr = [{"env": env, "model":model, "args":args} for i in range(int(8e3))]
-    # p = parallel_process(arr, train, use_kwargs=True)
-    # pool = mp.Pool(16)
-
-    # pool.apply_async(train, args=(env, model, step, args,), callback=update)
+    proc_bar.join()

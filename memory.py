@@ -100,3 +100,10 @@ class SubTrajectory(object):
 		self.new_rgb.clear(), self.new_pos.clear()
 		self.new_ori.clear()
 		self.len = 0
+
+import multiprocessing
+
+def sample_minibatch(replay_buffer, count):
+	batch = []
+	batch = random.sample(list(replay_buffer), count)
+	return batch

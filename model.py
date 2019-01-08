@@ -146,8 +146,9 @@ class CPCI_Action_30(nn.Module):
             hidden = data.belief
             obs_batch = np.array(data.new_rgb)
             obs_batch= torch.from_numpy(obs_batch).type('torch.FloatTensor')/255.
+            obs_batch = obs_batch.to(self.device)
             a_batch = np.array(data.action)
-            a_batch = torch.from_numpy(a_batch).to(dtype=torch.float32)
+            a_batch = torch.from_numpy(a_batch).to(dtype=torch.float32).to(self.device)
             z_t = self.conv(obs_batch)
             z_a = torch.cat((z_t, a_batch), dim=1).unsqueeze(0)
             b_t, _ = self.belief_gru.gru1(z_a, hidden)
@@ -160,14 +161,14 @@ class CPCI_Action_30(nn.Module):
         loss_pos, loss_neg = 0, 0
         for i, data in enumerate(data_batch):
             a_batch = np.array(data.action)
-            a_batch = torch.from_numpy(a_batch).to(dtype=torch.float32)
+            a_batch = torch.from_numpy(a_batch).to(dtype=torch.float32).to(self.device)
             for j in range(data.len - 30):
                 f = random.randint(1,30)
                 z_batch_neg = utils.sample_negatives(z_batch, i, f, len(data_batch))
                 pred_positive, pred_negative = self.forward(beliefs[i][j:j+1], a_batch[j+1:j+f+1], z_batch[i][j+1:j+f+1], z_batch_neg, f)
                 # TODO: Add loss calculation and optim step
-                loss_pos += loss_cr(torch.sigmoid(pred_positive.squeeze(0)), torch.ones((f, 1)))/70
-                loss_neg += loss_cr(torch.sigmoid(pred_negative), torch.zeros((f, 1)))/70
+                loss_pos += loss_cr(torch.sigmoid(pred_positive.squeeze(0)), torch.ones((f, 1)).to(self.device))/70
+                loss_neg += loss_cr(torch.sigmoid(pred_negative), torch.zeros((f, 1)).to(self.device))/70
         loss = (loss_pos + loss_neg)/(2*len(data_batch))
         print ("Loss: ", loss.data)
         loss.backward()
